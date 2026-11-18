@@ -5,6 +5,7 @@ import { GLTFLoader } from '../vendor/GLTFLoader.js';
 // anatomy-upper.glb: BodyParts3D muscles (CC BY 4.0, via open-anatomy-3d),
 // split per training muscle group. Mesh names are `<muscleId>#l` / `#r`, plus `context`.
 const MODEL = 'models/anatomy-upper.glb';
+const MODEL_B64 = 'models/anatomy-upper.glb.b64.txt';
 
 const CTX_COLOR = 0x39414f;   // bones and muscles outside the plan
 const IDLE      = 0x8793a8;   // in today's plan, nothing done yet
@@ -42,7 +43,7 @@ export function createBody(container, onSelect) {
   const pickable = [];
   let state = {}, selected = null, hovered = null, ready = false;
 
-  new GLTFLoader().load(MODEL, (gltf) => {
+  const onLoad = (gltf) => {
     gltf.scene.traverse((o) => {
       if (!o.isMesh) return;
       const id = o.name.split('#')[0];
@@ -59,11 +60,29 @@ export function createBody(container, onSelect) {
     ready = true;
     container.classList.remove('loading');
     apply();
-  }, undefined, (err) => {
+  };
+  const onError = (err) => {
     console.error('anatomy model failed to load', err);
     container.classList.remove('loading');
     container.classList.add('failed');
-  });
+  };
+
+  // Normally the .glb is fetched directly. Some static hosts refuse to serve
+  // binary types they don't know, so fall back to a base64 copy of the same file.
+  (async () => {
+    const loader = new GLTFLoader();
+    try {
+      const res = await fetch(MODEL);
+      if (res.ok) return loader.parse(await res.arrayBuffer(), '', onLoad, onError);
+    } catch { /* fall through */ }
+    try {
+      const b64 = (await (await fetch(MODEL_B64)).text()).trim();
+      const bin = atob(b64);
+      const buf = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+      loader.parse(buf.buffer, '', onLoad, onError);
+    } catch (err) { onError(err); }
+  })();
 
   /* ---------- colouring ---------- */
   function colorFor(id) {
