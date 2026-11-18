@@ -13,6 +13,7 @@ const FILES = [
   'examples/jsm/controls/OrbitControls.js',
   'examples/jsm/loaders/GLTFLoader.js',
   'examples/jsm/utils/BufferGeometryUtils.js',
+  'examples/jsm/environments/RoomEnvironment.js',
 ];
 
 fs.mkdirSync(out, { recursive: true });
