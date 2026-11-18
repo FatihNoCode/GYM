@@ -67,11 +67,8 @@ function render() {
   const list = $('#list');
   list.innerHTML = '';
 
-  let doneSets = 0, totalSets = 0, volume = 0;
-
   for (const ex of plan) {
     const e = store.getEntry(session, ex);
-    totalSets += ex.sets;
     const hitsSelected = selected ? ex.muscles[selected] : null;
 
     const card = document.createElement('article');
@@ -109,7 +106,6 @@ function render() {
 
     const setsEl = card.querySelector('.sets');
     e.sets.forEach((s, i) => {
-      if (s.done) { doneSets++; volume += (Number(s.w) || 0) * (Number(s.r) || 0); }
       const row = document.createElement('div');
       row.className = 'set' + (s.done ? ' done' : '');
       row.innerHTML = `
@@ -140,14 +136,26 @@ function render() {
     list.appendChild(card);
   }
 
-  $('#progress').textContent = `${doneSets}/${totalSets} sets`;
-  $('#progressBar').style.width = totalSets ? `${(doneSets / totalSets) * 100}%` : '0%';
-  $('#volume').textContent = `${Math.round(volume).toLocaleString()} kg lifted`;
+  updateStats();
   $('#selName').textContent = selected ? MUSCLES[selected].name : 'Whole body';
   $('#clearSel').hidden = !selected;
 
   body?.setState(heat(), selected);
   renderHistory();
+}
+
+/** Set count, progress bar and volume — cheap enough to refresh on every keystroke. */
+function updateStats() {
+  const session = store.getSession(data, date, day);
+  let done = 0, total = 0, volume = 0;
+  for (const ex of planFor(day)) {
+    total += ex.sets;
+    for (const s of store.getEntry(session, ex).sets)
+      if (s.done) { done++; volume += (Number(s.w) || 0) * (Number(s.r) || 0); }
+  }
+  $('#progress').textContent = `${done}/${total} sets`;
+  $('#progressBar').style.width = total ? `${(done / total) * 100}%` : '0%';
+  $('#volume').textContent = `${Math.round(volume).toLocaleString()} kg lifted`;
 }
 
 function renderHistory() {
@@ -189,7 +197,8 @@ function renderHistory() {
 function selectMuscle(m) { selected = m; render(); }
 function persist(full = true) {
   store.save(data);
-  if (full) render(); else body?.setState(heat(), selected);
+  if (full) render();
+  else { updateStats(); body?.setState(heat(), selected); }
 }
 
 /* ---------- wiring ---------- */

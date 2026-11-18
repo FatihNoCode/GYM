@@ -40,6 +40,13 @@ main{display:grid;grid-template-columns:minmax(320px,var(--mw,42%)) 1fr;gap:16px
 #canvasWrap{height:min(60vh,520px);min-height:320px;border-radius:10px;background:
   radial-gradient(60% 60% at 50% 35%, #1e2736 0%, #10141b 100%);overflow:hidden;touch-action:none}
 #canvasWrap canvas{display:block;width:100%!important;height:100%!important}
+#canvasWrap{position:relative;display:grid;place-items:center}
+.loadmsg{color:var(--dim);font-size:13px;display:none}
+#canvasWrap.loading .loadmsg{display:block}
+#canvasWrap.failed .loadmsg{display:block;color:var(--bad)}
+#canvasWrap.failed .loadmsg::after{content:" — model could not load"}
+.credit{color:#5f6c80;font-size:11px;line-height:1.35;margin:6px 0 0}
+.credit a{color:#7f8da3}
 .views{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
 .views button{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px}
 .selbar{display:flex;align-items:center;gap:10px;margin-top:10px}

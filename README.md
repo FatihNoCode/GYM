@@ -4,6 +4,9 @@ A single-page planner / tracker / 3D muscle map for a two-day upper-body split (
 No build step, no server-side anything: plain HTML + ES modules + a vendored copy of three.js.
 Your log is stored in the browser (localStorage) and the app works offline once loaded.
 
+The 3D figure is a real anatomical model — BodyParts3D cadaver-derived muscle meshes, not
+hand-made shapes — split per trained muscle group by `tools/build-anatomy.mjs`.
+
 ## Run it
 
 ```bash
@@ -17,7 +20,9 @@ use "Add to home screen" — it is a PWA and caches itself for offline use at th
 
 ## What it does
 
-- **3D muscle map** — drag to rotate, scroll to zoom, front/back/left/right buttons.
+- **3D muscle map** — a real anatomy model (pecs split into upper/mid/lower, deltoid into
+  front/side/rear, biceps / triceps / brachialis, forearm flexors and extensors, lats, rhomboids,
+  traps). Drag to rotate, scroll to zoom, front/back/left/right buttons.
   Muscles in today's plan light up; they warm from blue → amber → red as you tick sets off,
   so you can see at a glance what is still untouched. Click a muscle to filter the exercise list.
 - **Day A / Day B plans** — exactly the split in `js/data.js`, with sets × reps, the do/don't cue
@@ -42,6 +47,9 @@ use "Add to home screen" — it is a PWA and caches itself for offline use at th
 | `js/store.js` | localStorage log + history lookups |
 | `js/app.js` | UI wiring |
 | `sw.js`, `manifest.webmanifest` | Offline / installable support |
+| `models/anatomy-upper.glb` | The anatomy model: 28 named muscle meshes + a context body |
+| `tools/build-anatomy.mjs` | Rebuilds that model from `open-anatomy-3d` (`npm run build:anatomy`) |
+| `tools/vendor-three.mjs` | Re-copies three.js into `vendor/` (`npm run vendor`) |
 | `vendor/` | three.js r169 (vendored so the app works with no network) |
 
 ## Changing the program
@@ -60,3 +68,24 @@ Everything lives in `js/data.js`. An exercise entry looks like:
 `muscles` maps a muscle id (see `MUSCLES` at the top of the file) to how much of the work it takes —
 `1` for the prime mover, lower for helpers. That is what drives both the 3D heat map and the
 weekly volume numbers.
+
+
+## Rebuilding the 3D model
+
+```bash
+npm install
+npm run build:anatomy
+```
+
+`tools/build-anatomy.mjs` loads the BodyParts3D male model from `open-anatomy-3d`, cuts each
+anatomical group into the muscles this program trains (a triangle-level split on world-space
+landmarks — e.g. the pectoralis is cut at chest heights 1.352 m and 1.268 m, the deltoid by
+depth), decimates everything else into a single context mesh with meshoptimizer, and writes
+`models/anatomy-upper.glb` (~8 MB). Adjust the `SPLIT` rules at the top of that file to change
+where the cuts fall.
+
+## Credits
+
+Anatomy: BodyParts3D © The Database Center for Life Science (CC BY 4.0), via
+[open-anatomy-3d](https://github.com/MervinR07/open-anatomy-3d) (CC BY 4.0).
+three.js (MIT), meshoptimizer (MIT). Not a medical device — not for diagnosis.
