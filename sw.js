@@ -1,9 +1,10 @@
-const CACHE = 'ublab-v1';
+const CACHE = 'ublab-v2';
 const ASSETS = [
   './', './index.html', './styles.css', './manifest.webmanifest',
   './js/app.js', './js/data.js', './js/store.js', './js/body3d.js',
   './vendor/three.module.js', './vendor/OrbitControls.js',
-  './vendor/GLTFLoader.js', './vendor/BufferGeometryUtils.js', './models/anatomy-upper.glb',
+  './vendor/GLTFLoader.js', './vendor/BufferGeometryUtils.js', './vendor/RoomEnvironment.js',
+  './models/anatomy-upper.glb',
 ];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));

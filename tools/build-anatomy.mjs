@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
-import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeVertices, mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MeshoptSimplifier } from 'meshoptimizer/simplifier';
 
 const require_ = createRequire(import.meta.url);
@@ -100,6 +100,18 @@ const MUSCLE_CHUNKS = [
   'muscular.muscles_of_thorax.3',                  // pectoralis major parts
 ];
 
+// A few context chunks are still read at full quality: the legs and the
+// abdominals are large and plainly visible, and the economy versions of them
+// are so coarse that the muscles blur into one shape.
+const CONTEXT_STANDARD = new Set([
+  'muscular.muscles_of_abdomen.2',
+  'muscular.anterior_compartment_of_thigh',
+  'muscular.posterior_compartment_of_thigh',
+  'muscular.medial_compartment_of_thigh',
+  'muscular.posterior_compartment_of_leg',
+  'muscular.superficial_gluteal_muscles--bursae_of_upper_limb',
+]);
+
 // Chunks loaded at "economy" quality purely so the figure reads as a body.
 const CONTEXT_CHUNKS = [
   'muscular.cervical_part_of_muscular_system',
@@ -109,7 +121,6 @@ const CONTEXT_CHUNKS = [
   'muscular.muscles_of_abdomen.3',
   'muscular.external_abdominal_oblique_muscle_l',
   'muscular.epaxial_muscles',                      // erectors
-  'muscular.muscular_system_of_lower_limb',
   'muscular.anterior_compartment_of_thigh',
   'muscular.posterior_compartment_of_thigh',
   'muscular.medial_compartment_of_thigh',
@@ -119,6 +130,10 @@ const CONTEXT_CHUNKS = [
   'muscular.muscles_of_foot',
   'muscular.cranial_part_of_muscular_system',      // a face, so the figure reads as a person
   'skeletal.cranium--extracranial_bones_of_head',  // a head to orient by
+  'skeletal.thoracic_skeleton',                    // ribs under the pecs
+  'skeletal.vertebral_column',
+  'skeletal.bones_of_upper_limb',                  // hands
+  'skeletal.auditory_ossicles--bones_of_lower_limb',
 ];
 
 // Never useful here: deep, hidden or non-muscular structures.
@@ -126,15 +141,20 @@ const DROP = [
   /bursa/, /fascia/, /sheath/, /tendinous_arch/, /ligament/,
   /intercostal/, /levatores_/, /transversus_thoracis/, /subclavius/,
   /diaphragm/, /coccygeus/, /levator_ani/, /pubo/, /anal_sphincter/, /pelvic/,
-  /intertransversarii/, /serratus_posterior/, /pectoralis_minor/,
+  /intertransversarii/, /serratus_posterior/, /pectoralis_minor/, /retinaculum/,
+  // the external oblique is modelled with its aponeurosis, a smooth apron over
+  // the whole belly; without it the abdominals actually read as abdominals
+  /external_abdominal_oblique/,
   /longus_colli/, /longus_capitis/, /scalene/, /prevertebral/,
 ];
 
-// Triangle budgets. The muscles keep enough resolution to stay smooth; the
-// context is squeezed hard because it is only ever seen as a silhouette.
-const MUSCLE_BUDGET = 9000;    // per muscle group, per side
-const CONTEXT_RATIO = 0.22;
-const CONTEXT_FLOOR = 300;
+// Triangle budgets, applied per anatomical structure so that each muscle keeps
+// its own outline: welding and smoothing across two muscles that touch would
+// fuse them into one blob, which is what made the untrained body look like a
+// mannequin rather than a set of muscles.
+const MUSCLE_RATIO = 0.55, MUSCLE_FLOOR = 400, MUSCLE_CAP = 6000;
+const CONTEXT_RATIO = 0.45, CONTEXT_FLOOR = 250, CONTEXT_CAP = 3000;
+const CONTEXT_CAP_HI = 1500;   // per structure, for the chunks read at full quality
 const HAND_Y = 0.93;           // below the wrist: hand, not a trained muscle
 
 /* ------------------------------------------------------------------ */
@@ -159,7 +179,7 @@ function simplify(geo, targetTris) {
   const index = geo.getIndex().array;
   const tris = index.length / 3;
   if (tris <= targetTris) return geo;
-  const target = Math.max(300, Math.floor(targetTris)) * 3;
+  const target = Math.min(index.length, Math.max(1, Math.floor(targetTris)) * 3);
   const idx32 = index instanceof Uint32Array ? index : new Uint32Array(index);
   const [dst] = MeshoptSimplifier.simplify(idx32, geo.getAttribute('position').array, 3, target, 0.02, ['LockBorder']);
   const out = geo.clone();
@@ -177,19 +197,25 @@ const loadChunk = (id, quality) => new Promise((resolve, reject) => {
   loader.parse(ab, '', (gltf) => resolve(gltf), reject);
 });
 
-// group id -> { pos: number[] } (normals are recomputed after welding)
+// group id -> (structure id -> triangle positions); normals come later
 const groups = new Map();
-const pushTri = (id, p) => {
+const pushTri = (id, structure, p) => {
   let g = groups.get(id);
-  if (!g) groups.set(id, (g = { pos: [] }));
-  g.pos.push(...p);
+  if (!g) groups.set(id, (g = new Map()));
+  let arr = g.get(structure);
+  if (!arr) g.set(structure, (arr = []));
+  arr.push(...p);
 };
 
 await MeshoptSimplifier.ready;
 
 const a = new THREE.Vector3();
-for (const [list, quality, keepMuscles] of [[MUSCLE_CHUNKS, 'standard', true], [CONTEXT_CHUNKS, 'economy', false]]) {
+const capOf = new Map();     // structure id -> triangle cap
+for (const [list, defaultQuality, keepMuscles] of [[MUSCLE_CHUNKS, 'standard', true], [CONTEXT_CHUNKS, 'economy', false]]) {
   for (const chunkId of list) {
+    const isBone = chunkId.startsWith('skeletal.');
+    const hiRes = CONTEXT_STANDARD.has(chunkId);
+    const quality = hiRes ? 'standard' : defaultQuality;
     const gltf = await loadChunk(chunkId, quality);
     gltf.scene.updateMatrixWorld(true);
     gltf.scene.traverse((o) => {
@@ -209,13 +235,15 @@ for (const [list, quality, keepMuscles] of [[MUSCLE_CHUNKS, 'standard', true], [
         let id = groupFor(structure);
         if (!id) continue;
         if (!keepMuscles && id !== 'context') id = 'context';
+        if (isBone && id === 'context') id = 'bone';
         const p = [];
         let y = 0;
         for (let k = 0; k < 3; k++) { a.fromBufferAttribute(pos, t + k); p.push(a.x, a.y, a.z); y += a.y / 3; }
         // the long finger tendons are part of the forearm muscles but read as
         // spikes on the hand: keep them, but not as part of the trained group
         if (id !== 'context' && y < HAND_Y) id = 'context';
-        pushTri(id, p);
+        if (hiRes) capOf.set(structure, CONTEXT_CAP_HI);
+        pushTri(id, structure, p);
       }
     });
     console.log('read', chunkId.padEnd(52), quality);
@@ -225,21 +253,32 @@ for (const [list, quality, keepMuscles] of [[MUSCLE_CHUNKS, 'standard', true], [
 /* ---------- weld, smooth, simplify, export ---------- */
 const scene = new THREE.Scene();
 let total = 0;
-for (const [id, g] of [...groups.entries()].sort()) {
-  let geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(g.pos), 3));
-  geo = mergeVertices(geo, 1e-5);
-  const isContext = id === 'context';
-  const tris = geo.getIndex().count / 3;
-  geo = simplify(geo, isContext ? Math.max(CONTEXT_FLOOR, tris * CONTEXT_RATIO) : MUSCLE_BUDGET);
-  geo = mergeVertices(geo, 1e-5);
-  geo.computeVertexNormals();          // smooth shading, no faceting
+for (const [id, structures] of [...groups.entries()].sort()) {
+  const isContext = id === 'context' || id === 'bone';
+  const parts = [];
+  let before = 0;
+  for (const [structure, positions] of structures) {
+    let geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+    geo = mergeVertices(geo, 1e-5);
+    const tris = geo.getIndex().count / 3;
+    before += tris;
+    const budget = isContext
+      ? Math.min(capOf.get(structure) ?? CONTEXT_CAP, Math.max(CONTEXT_FLOOR, tris * CONTEXT_RATIO))
+      : Math.min(MUSCLE_CAP, Math.max(MUSCLE_FLOOR, tris * MUSCLE_RATIO));
+    geo = simplify(geo, budget);
+    geo = mergeVertices(geo, 1e-5);
+    geo.computeVertexNormals();          // smooth shading, no faceting
+    geo.deleteAttribute('uv');
+    parts.push(geo);
+  }
+  const geo = parts.length === 1 ? parts[0] : mergeGeometries(parts, false);
   const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial());
   mesh.name = id;
   scene.add(mesh);
   const out = geo.getIndex().count / 3;
   total += out;
-  console.log(id.padEnd(18), String(tris).padStart(7), '->', String(out).padStart(7));
+  console.log(id.padEnd(18), String(structures.size).padStart(3), 'parts', String(before).padStart(7), '->', String(out).padStart(7));
 }
 console.log('total triangles', total);
 

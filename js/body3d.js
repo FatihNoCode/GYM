@@ -10,7 +10,8 @@ const MODEL_B64 = 'models/anatomy-upper.glb.b64.txt';
 
 // Anatomical palette: everything is muscle-coloured, the plan only changes how
 // alive it looks - resting flesh -> fresh pink -> worked amber -> fully worked red.
-const CONTEXT = new THREE.Color(0x7e6f66);   // other muscle, bone, fascia
+const CONTEXT = new THREE.Color(0xa49a92);   // untrained muscle: pale grey
+const BONE    = new THREE.Color(0xd9d2c4);   // skeleton
 const RESTING = new THREE.Color(0x8e433d);   // muscle, not in today's plan
 const FRESH   = new THREE.Color(0xb8463d);   // in the plan, nothing done yet
 const WORKED  = new THREE.Color(0xd4821f);
@@ -31,14 +32,14 @@ export function createBody(container, onSelect) {
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environmentIntensity = 0.35;
 
-  const PIVOT = new THREE.Vector3(0, 1.26, 0);   // chest height; model stands on y = 0
+  const PIVOT = new THREE.Vector3(0, 1.26, 0);   // upper-body framing by default   // chest height; model stands on y = 0
   camera.position.set(0, 1.3, 2.05);
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.target.copy(PIVOT);
   controls.enablePan = false;
   controls.minDistance = 0.6;
-  controls.maxDistance = 4.0;
+  controls.maxDistance = 4.5;
   controls.enableDamping = true;
   controls.rotateSpeed = 0.85;
   controls.zoomSpeed = 0.8;
@@ -67,9 +68,10 @@ export function createBody(container, onSelect) {
     gltf.scene.traverse((o) => {
       if (!o.isMesh) return;
       const id = o.name.split('#')[0];
-      if (!id || id === 'context') {
+      if (!id || id === 'context' || id === 'bone') {
         o.material = new THREE.MeshStandardMaterial({
-          color: CONTEXT.clone(), roughness: 0.92, metalness: 0,
+          color: (id === 'bone' ? BONE : CONTEXT).clone(),
+          roughness: id === 'bone' ? 0.7 : 0.88, metalness: 0,
         });
         return;
       }
@@ -159,24 +161,45 @@ export function createBody(container, onSelect) {
   function setState(next, sel) { state = next; selected = sel ?? null; apply(); }
 
   // turn to a view instead of snapping, so you keep your bearings
+  const FRAMES = {
+    upper: { y: 1.26, d: 2.05 },     // shoulders to hips
+    full:  { y: 0.95, d: 3.60 },     // head to feet
+  };
+  let frame = 'upper';
   let spin = null;
   const sph = new THREE.Spherical();
+
   function view(which) {
-    const target = { front: 0, back: Math.PI, left: -Math.PI / 2, right: Math.PI / 2 }[which];
-    if (target === undefined) return;
-    const d = camera.position.distanceTo(controls.target);
+    if (which === 'upper' || which === 'full') return goto({ frame: which });
+    const theta = { front: 0, back: Math.PI, left: -Math.PI / 2, right: Math.PI / 2 }[which];
+    if (theta === undefined) return;
+    goto({ theta, phi: Math.PI / 2 - 0.05 });
+  }
+
+  function goto({ theta, phi, frame: nextFrame }) {
+    if (nextFrame) frame = nextFrame;
+    const f = FRAMES[frame];
     sph.setFromVector3(camera.position.clone().sub(controls.target));
     const from = sph.theta;
-    let to = target;
+    let to = theta ?? from;
     while (to - from > Math.PI) to -= 2 * Math.PI;
     while (to - from < -Math.PI) to += 2 * Math.PI;
-    spin = { from, to, phi0: sph.phi, phi1: Math.PI / 2 - 0.05, d, t0: performance.now(), ms: 420 };
+    spin = {
+      t0: performance.now(), ms: 480,
+      theta0: from, theta1: to,
+      phi0: sph.phi, phi1: phi ?? sph.phi,
+      d0: sph.radius, d1: nextFrame ? f.d : sph.radius,
+      y0: controls.target.y, y1: f.y,
+    };
   }
+
   function stepSpin() {
     if (!spin) return;
     const k = Math.min(1, (performance.now() - spin.t0) / spin.ms);
     const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
-    sph.set(spin.d, spin.phi0 + (spin.phi1 - spin.phi0) * e, spin.from + (spin.to - spin.from) * e);
+    const mix = (a, b) => a + (b - a) * e;
+    controls.target.y = mix(spin.y0, spin.y1);
+    sph.set(mix(spin.d0, spin.d1), mix(spin.phi0, spin.phi1), mix(spin.theta0, spin.theta1));
     camera.position.copy(controls.target).add(new THREE.Vector3().setFromSpherical(sph));
     if (k >= 1) spin = null;
   }

@@ -32,19 +32,29 @@ function heat() {
 
 /* ---------- rest timer ---------- */
 let timerId = null, timerLeft = 0;
+const mmss = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+
+function paintTimer() {
+  const el = $('#timer');
+  const running = timerLeft > 0;
+  el.textContent = running ? mmss(timerLeft) : 'rest';
+  el.classList.toggle('running', running);
+  $('#restbar').hidden = !running;
+  document.body.classList.toggle('resting', running);
+  if (running) $('#restLeft').textContent = mmss(timerLeft);
+}
+function stopTimer() { clearInterval(timerId); timerId = null; timerLeft = 0; paintTimer(); }
 function startTimer(sec = 90) {
   clearInterval(timerId);
   timerLeft = sec;
-  const el = $('#timer');
-  el.classList.add('running');
-  const tick = () => {
-    el.textContent = `${String(Math.floor(timerLeft / 60))}:${String(timerLeft % 60).padStart(2, '0')}`;
-    if (timerLeft <= 0) { clearInterval(timerId); el.classList.remove('running'); beep(); }
+  paintTimer();
+  timerId = setInterval(() => {
     timerLeft--;
-  };
-  tick();
-  timerId = setInterval(tick, 1000);
+    if (timerLeft <= 0) { clearInterval(timerId); timerId = null; timerLeft = 0; paintTimer(); beep(); return; }
+    paintTimer();
+  }, 1000);
 }
+
 function beep() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -66,6 +76,7 @@ function render() {
   const plan = planFor(day);
   const list = $('#list');
   list.innerHTML = '';
+  let nextMarked = false;
 
   for (const ex of plan) {
     const e = store.getEntry(session, ex);
@@ -74,7 +85,9 @@ function render() {
     const card = document.createElement('article');
     card.className = 'card';
     if (selected) card.classList.add(hitsSelected ? 'match' : 'dim');
-    if (e.sets.every(s => s.done)) card.classList.add('complete');
+    const finished = e.sets.every(s => s.done);
+    if (finished) card.classList.add('complete');
+    if (!finished && !nextMarked) { card.classList.add('next'); card.dataset.next = '1'; nextMarked = true; }
 
     const name = e.variant === 'main' ? ex.main : ex.backup;
     const last = store.lastPerformance(data, ex, date);
@@ -106,19 +119,49 @@ function render() {
 
     const setsEl = card.querySelector('.sets');
     e.sets.forEach((s, i) => {
+      // what to suggest: the set before it, else the best set of the last session
+      const prev = e.sets.slice(0, i).reverse().find(x => x.w !== '' || x.r !== '');
+      const hintW = prev?.w || last?.best.w || '';
+      const hintR = prev?.r || last?.best.r || String(parseInt(ex.reps, 10) || '');
+
       const row = document.createElement('div');
       row.className = 'set' + (s.done ? ' done' : '');
       row.innerHTML = `
         <span class="n">${i + 1}</span>
-        <input class="w" type="number" inputmode="decimal" step="0.5" placeholder="kg" value="${s.w}">
-        <input class="r" type="number" inputmode="numeric" placeholder="reps" value="${s.r}">
-        <button class="tick" title="Tick this set off">${s.done ? '✓' : ''}</button>`;
-      row.querySelector('.w').oninput = (ev) => { s.w = ev.target.value; persist(false); };
-      row.querySelector('.r').oninput = (ev) => { s.r = ev.target.value; persist(false); };
+        <span class="field">
+          <button class="step" data-step="-2.5" title="2.5 kg less">−</button>
+          <input class="w" type="number" inputmode="decimal" step="0.5"
+                 placeholder="${hintW || 'kg'}" value="${s.w}" aria-label="weight in kg">
+          <button class="step" data-step="2.5" title="2.5 kg more">+</button>
+        </span>
+        <span class="field">
+          <button class="step r" data-step="-1" title="one rep less">−</button>
+          <input class="r" type="number" inputmode="numeric"
+                 placeholder="${hintR || 'reps'}" value="${s.r}" aria-label="reps">
+          <button class="step r" data-step="1" title="one rep more">+</button>
+        </span>
+        <button class="tick" title="${s.done ? 'Undo this set' : 'Tick this set off'}">✓</button>`;
+
+      const wEl = row.querySelector('input.w'), rEl = row.querySelector('input.r');
+      wEl.oninput = (ev) => { s.w = ev.target.value; persist(false); };
+      rEl.oninput = (ev) => { s.r = ev.target.value; persist(false); };
+      for (const b of row.querySelectorAll('.step')) {
+        b.onclick = () => {
+          const reps = b.classList.contains('r');
+          const el = reps ? rEl : wEl;
+          const base = Number(el.value || (reps ? hintR : hintW) || 0);
+          const next = Math.max(0, base + Number(b.dataset.step));
+          el.value = reps ? String(Math.round(next)) : String(Math.round(next * 2) / 2);
+          if (reps) s.r = el.value; else s.w = el.value;
+          persist(false);
+        };
+      }
       row.querySelector('.tick').onclick = () => {
         s.done = !s.done;
         if (s.done) {
-          if (s.r === '') s.r = String(parseInt(ex.reps, 10) || '');
+          // one tap is enough: fill in what the placeholders were showing
+          if (s.w === '') s.w = String(hintW);
+          if (s.r === '') s.r = String(hintR);
           startTimer(ex.sets >= 4 ? 75 : 120);
         }
         persist();
@@ -156,6 +199,7 @@ function updateStats() {
   $('#progress').textContent = `${done}/${total} sets`;
   $('#progressBar').style.width = total ? `${(done / total) * 100}%` : '0%';
   $('#volume').textContent = `${Math.round(volume).toLocaleString()} kg lifted`;
+  $('#jump').hidden = done >= total;
 }
 
 function renderHistory() {
@@ -194,7 +238,28 @@ function renderHistory() {
     b.onclick = () => { date = b.dataset.goto; day = data.sessions[date].day; render(); };
 }
 
-function selectMuscle(m) { selected = m; render(); }
+function selectMuscle(m) {
+  selected = m;
+  render();
+  // on a phone the plan is behind a tab: picking a muscle should show it
+  if (m && window.matchMedia('(max-width:900px)').matches) setTab('plan');
+}
+
+function setTab(which) {
+  document.body.classList.toggle('tab-plan', which === 'plan');
+  document.body.classList.toggle('tab-body', which === 'body');
+  for (const b of document.querySelectorAll('[data-tab]'))
+    b.classList.toggle('active', b.dataset.tab === which);
+}
+
+/** Scroll to the first set still to do, and put the cursor in its weight box. */
+function jumpToNext() {
+  const card = $('#list [data-next]');
+  if (!card) return;
+  setTab('plan');
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  card.querySelector('.set:not(.done) input.w')?.focus({ preventScroll: true });
+}
 function persist(full = true) {
   store.save(data);
   if (full) render();
@@ -209,11 +274,23 @@ function init() {
   for (const b of document.querySelectorAll('[data-day]'))
     b.onclick = () => { day = b.dataset.day; localStorage.setItem('gym.day', day); render(); };
   for (const b of document.querySelectorAll('[data-view]'))
-    b.onclick = () => body.view(b.dataset.view);
+    b.onclick = () => {
+      body.view(b.dataset.view);
+      if (b.dataset.frame)
+        for (const o of document.querySelectorAll('[data-frame]'))
+          o.classList.toggle('active', o === b);
+    };
+  for (const b of document.querySelectorAll('[data-tab]'))
+    b.onclick = () => setTab(b.dataset.tab);
+  setTab('body');
+
+  $('#jump').onclick = jumpToNext;
+  $('#restPlus').onclick = () => startTimer(timerLeft + 30);
+  $('#restSkip').onclick = stopTimer;
 
   $('#dateInput').onchange = (e) => { date = e.target.value || store.todayISO(); render(); };
   $('#clearSel').onclick = () => selectMuscle(null);
-  $('#timer').onclick = () => startTimer(90);
+  $('#timer').onclick = () => (timerLeft > 0 ? stopTimer() : startTimer(90));
 
   $('#resetDay').onclick = () => {
     if (!confirm(`Clear all logged sets for ${date}?`)) return;

@@ -48,12 +48,15 @@ main{display:grid;grid-template-columns:minmax(320px,var(--mw,42%)) 1fr;gap:16px
 .credit{color:#5f6c80;font-size:11px;line-height:1.35;margin:6px 0 0}
 .credit a{color:#7f8da3}
 .views{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
-.views button{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px}
+.views button{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 7px;min-height:40px}
+.views button.active{border-color:var(--acc);color:var(--acc)}
+.views+.views{margin-top:6px}
 .selbar{display:flex;align-items:center;gap:10px;margin-top:10px}
 .legend{display:flex;flex-wrap:wrap;gap:10px;align-items:center;color:var(--dim);font-size:12px;margin:8px 0 0}
 .sw{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:4px;vertical-align:-1px}
-.sw.base{background:#2a323f}.sw.idle{background:#6c7f9e}.sw.cool{background:#3fa7ff}
-.sw.warm{background:#ffb020}.sw.hot{background:#ff3b30}
+.sw.base{background:#a49a92}.sw.idle{background:#c4544b}
+.sw.warm{background:#d4821f}.sw.hot{background:#d92b1f}
+.legend span{display:inline-flex;align-items:center;white-space:nowrap}
 .hint{color:var(--dim);font-size:12.5px;margin:8px 0 0}
 
 /* cards */
@@ -97,3 +100,70 @@ details summary{cursor:pointer;color:var(--dim);font-size:13px;padding:4px 0}
 #sessions button{background:#101620;border:1px solid var(--line);border-radius:8px;padding:3px 8px;color:var(--txt)}
 .tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .tools label{cursor:pointer}
+
+
+/* ---------- next set, tabs, rest bar, steppers ---------- */
+#jump{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:6px 12px;color:var(--dim)}
+#jump:hover{color:var(--txt);border-color:#3b4a61}
+#jump[hidden]{display:none}
+
+.tabs{display:none;gap:6px;padding:10px 16px 0}
+.tabs button{
+  flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:999px;
+  padding:9px;color:var(--dim);min-height:42px;
+}
+.tabs button.active{background:var(--acc);border-color:var(--acc);color:#1a1205;font-weight:650}
+
+@media (max-width:900px){
+  .tabs{display:flex}
+  body.tab-plan .model{display:none}
+  body.tab-body .plan{display:none}
+  main{padding-top:10px}
+  .stats .wide{display:none}
+  #canvasWrap{height:min(52vh,460px)}
+}
+
+/* the card you are working on */
+.card.next{border-color:#ffb02066;box-shadow:0 0 0 1px #ffb02026}
+.card.next .target::after{content:" · next up";color:var(--txt);opacity:.75}
+
+/* set rows: bigger targets, weight stepper, last-time placeholders */
+.set{grid-template-columns:20px 1fr 1fr 52px;gap:6px}
+.set .field{display:flex;align-items:center;gap:4px;background:#101620;border:1px solid var(--line);border-radius:9px;padding:2px}
+.set .field input{border:0;background:transparent;padding:8px 0;min-width:0}
+.set .field input:focus{outline:none}
+.set .field button{
+  background:transparent;border:0;color:var(--dim);width:30px;height:34px;border-radius:7px;font-size:16px;line-height:1;
+}
+.set .field button:hover{background:#1a2432;color:var(--txt)}
+.set .tick{height:42px;font-size:19px;color:#3d485c}
+.set.done .tick{color:var(--ok)}
+.set.done .tick{background:#14301f;border-color:#3ddc8466}
+.set input::placeholder{color:#55627a}
+
+#restbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:20;
+  display:flex;align-items:center;gap:12px;
+  padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+  background:#171e29f2;border-top:1px solid var(--line);backdrop-filter:blur(8px);
+}
+#restbar[hidden]{display:none}
+#restLeft{font-size:22px;font-weight:650;font-variant-numeric:tabular-nums;color:var(--acc);min-width:64px}
+#restbar .restwho{color:var(--dim);margin-right:auto}
+#restbar button{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 14px;color:var(--txt);min-height:40px}
+body.resting{padding-bottom:72px}
+
+
+/* phones: a header that does not eat half the screen */
+@media (max-width:560px){
+  .topbar{padding:8px 12px;gap:8px 10px}
+  .topbar h1{font-size:15px}
+  .days button{padding:6px 11px;font-size:13.5px}
+  #dateInput{padding:5px 8px;font-size:13px;order:3}
+  .stats{order:4;width:100%;margin-left:0;justify-content:space-between;gap:8px}
+  .card header{flex-direction:column}
+  .card-actions{flex-direction:row;align-self:stretch}
+  .card-actions .ghost{flex:1;padding:8px 10px}
+  .set{grid-template-columns:16px 1fr 1fr 48px;gap:5px}
+  .set .field button{width:26px}
+}
