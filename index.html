@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<title>Upper Body Lab</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>💪</text></svg>">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <h1>Upper Body Lab</h1>
+  <div class="days">
+    <button data-day="A">Day A · Push</button>
+    <button data-day="B">Day B · Pull</button>
+  </div>
+  <input id="dateInput" type="date">
+  <div class="stats">
+    <span id="progress">0/0 sets</span>
+    <span id="volume">0 kg lifted</span>
+    <button id="timer" title="Tap for a 90 s rest timer">rest</button>
+  </div>
+</header>
+<div id="progressTrack"><i id="progressBar"></i></div>
+
+<main>
+  <section class="panel model">
+    <div id="canvasWrap"></div>
+    <div class="views">
+      <button data-view="front">Front</button>
+      <button data-view="back">Back</button>
+      <button data-view="left">Left</button>
+      <button data-view="right">Right</button>
+    </div>
+    <div class="selbar">
+      <strong id="selName">Whole body</strong>
+      <button id="clearSel" class="ghost" hidden>show all</button>
+    </div>
+    <p class="legend">
+      <i class="sw base"></i> not trained today
+      <i class="sw idle"></i> planned
+      <i class="sw cool"></i> started
+      <i class="sw warm"></i> half
+      <i class="sw hot"></i> done
+    </p>
+    <p class="hint">Drag to rotate, scroll to zoom, click a muscle to see which exercises hit it.</p>
+  </section>
+
+  <section class="panel">
+    <div id="list"></div>
+    <details class="panel-sub" open>
+      <summary>Weekly volume per muscle</summary>
+      <div id="weekly"></div>
+    </details>
+    <details class="panel-sub">
+      <summary>Session history</summary>
+      <ul id="sessions"></ul>
+    </details>
+    <details class="panel-sub">
+      <summary>Rules &amp; data</summary>
+      <ul id="rules"></ul>
+      <div class="tools">
+        <button id="resetDay" class="ghost">Clear this day</button>
+        <button id="export" class="ghost">Export log</button>
+        <label class="ghost">Import log<input id="import" type="file" accept="application/json" hidden></label>
+      </div>
+      <p class="hint">Your log lives in this browser only. Export now and then to keep a backup.</p>
+    </details>
+  </section>
+</main>
+<script type="module" src="js/app.js"></script>
+<script>
+if ('serviceWorker' in navigator && location.protocol.startsWith('http'))
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+</script>
+</body>
+</html>
