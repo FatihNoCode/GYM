@@ -20,9 +20,10 @@ use "Add to home screen" — it is a PWA and caches itself for offline use at th
 
 ## What it does
 
-- **3D muscle map** — the whole body, muscle by muscle. The muscles in today's plan are
-  anatomical pink-red; everything else (untrained muscle, bone) is pale grey, so the plan reads
-  at a glance. As you tick sets off, the trained muscles warm from pink → amber → deep red.
+- **3D muscle map** — the whole body, muscle by muscle, all of it in anatomical flesh: legs,
+  abdominals, face and all. The muscles in today's plan are picked out in bright red against the
+  duller flesh of everything else, and bone is the pale layer underneath. As you tick sets off,
+  the trained muscles warm from red → amber → deep red.
   Drag to turn, scroll or pinch to zoom, front/back/left/right, upper body / whole body.
   Tap a muscle to filter the exercise list to the lifts that hit it.
   Groups: pecs (upper/mid/lower, the real clavicular, sternocostal and abdominal heads),
@@ -53,7 +54,7 @@ use "Add to home screen" — it is a PWA and caches itself for offline use at th
 | `js/store.js` | localStorage log + history lookups |
 | `js/app.js` | UI wiring |
 | `sw.js`, `manifest.webmanifest` | Offline / installable support |
-| `models/anatomy-upper.glb` | The anatomy model: 28 named muscle meshes + context + bone |
+| `models/anatomy-upper.glb` | The anatomy model: 28 named muscle meshes + `context` (the rest of the musculature) + `bone` |
 | `tools/build-anatomy.mjs` | Rebuilds that model (`npm run build:anatomy`) |
 | `tools/vendor-three.mjs` | Re-copies three.js into `vendor/` (`npm run vendor`) |
 | `vendor/` | three.js r169 (vendored so the app works with no network) |
@@ -92,7 +93,7 @@ where every muscle is a separate named structure, and:
   muscles, the ribs and the skeleton are still there as context;
 - simplifies **per structure**, never across two muscles that touch, which is what keeps each
   muscle's own outline instead of fusing neighbours into one blob;
-- recomputes smooth normals and writes `models/anatomy-upper.glb` (~6.6 MB, ~300k triangles).
+- recomputes smooth normals and writes `models/anatomy-upper.glb` (~7 MB, ~326k triangles).
 
 Mesh names are `<muscleId>#l` / `<muscleId>#r` for the trained groups, plus `context` and `bone`.
 

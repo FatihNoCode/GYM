@@ -104,6 +104,7 @@ const MUSCLE_CHUNKS = [
 // abdominals are large and plainly visible, and the economy versions of them
 // are so coarse that the muscles blur into one shape.
 const CONTEXT_STANDARD = new Set([
+  'muscular.cranial_part_of_muscular_system',   // the face: lots of small muscles
   'muscular.muscles_of_abdomen.2',
   'muscular.anterior_compartment_of_thigh',
   'muscular.posterior_compartment_of_thigh',
@@ -134,7 +135,16 @@ const CONTEXT_CHUNKS = [
   'skeletal.vertebral_column',
   'skeletal.bones_of_upper_limb',                  // hands
   'skeletal.auditory_ossicles--bones_of_lower_limb',
+  'nervous.sense_organs',                          // eyeballs, so the face has eyes
 ];
+
+// For a few chunks only a handful of structures are wanted.
+const KEEP_ONLY = {
+  'nervous.sense_organs': /^(sclera|cornea|iris)_[lr]$/,
+};
+
+// Structures that should look like bone rather than muscle.
+const BONE_LIKE = /^(sclera|cornea|iris)_[lr]$/;
 
 // Never useful here: deep, hidden or non-muscular structures.
 const DROP = [
@@ -215,6 +225,7 @@ for (const [list, defaultQuality, keepMuscles] of [[MUSCLE_CHUNKS, 'standard', t
   for (const chunkId of list) {
     const isBone = chunkId.startsWith('skeletal.');
     const hiRes = CONTEXT_STANDARD.has(chunkId);
+    const keepOnly = KEEP_ONLY[chunkId];
     const quality = hiRes ? 'standard' : defaultQuality;
     const gltf = await loadChunk(chunkId, quality);
     gltf.scene.updateMatrixWorld(true);
@@ -232,10 +243,12 @@ for (const [list, defaultQuality, keepMuscles] of [[MUSCLE_CHUNKS, 'standard', t
       for (let t = 0; t < pos.count; t += 3) {
         const structure = structureOfMesh.get(ids ? ids.getX(t) : -1);
         if (!structure) continue;
+        const bare = structure.replace(/^[a-z]+\./, '');
+        if (keepOnly && !keepOnly.test(bare)) continue;
         let id = groupFor(structure);
         if (!id) continue;
         if (!keepMuscles && id !== 'context') id = 'context';
-        if (isBone && id === 'context') id = 'bone';
+        if ((isBone || BONE_LIKE.test(bare)) && id === 'context') id = 'bone';
         const p = [];
         let y = 0;
         for (let k = 0; k < 3; k++) { a.fromBufferAttribute(pos, t + k); p.push(a.x, a.y, a.z); y += a.y / 3; }

@@ -10,10 +10,10 @@ const MODEL_B64 = 'models/anatomy-upper.glb.b64.txt';
 
 // Anatomical palette: everything is muscle-coloured, the plan only changes how
 // alive it looks - resting flesh -> fresh pink -> worked amber -> fully worked red.
-const CONTEXT = new THREE.Color(0xa49a92);   // untrained muscle: pale grey
+const CONTEXT = new THREE.Color(0xa36c63);   // muscle outside today's plan: dull flesh
 const BONE    = new THREE.Color(0xd9d2c4);   // skeleton
-const RESTING = new THREE.Color(0x8e433d);   // muscle, not in today's plan
-const FRESH   = new THREE.Color(0xb8463d);   // in the plan, nothing done yet
+const RESTING = new THREE.Color(0xa36c63);   // a trained group, but not today
+const FRESH   = new THREE.Color(0xc93a2e);   // in the plan, nothing done yet
 const WORKED  = new THREE.Color(0xd4821f);
 const SPENT   = new THREE.Color(0xbe1d12);
 
@@ -68,11 +68,13 @@ export function createBody(container, onSelect) {
     gltf.scene.traverse((o) => {
       if (!o.isMesh) return;
       const id = o.name.split('#')[0];
-      if (!id || id === 'context' || id === 'bone') {
-        o.material = new THREE.MeshStandardMaterial({
-          color: (id === 'bone' ? BONE : CONTEXT).clone(),
-          roughness: id === 'bone' ? 0.7 : 0.88, metalness: 0,
-        });
+      if (id === 'bone') {
+        o.material = new THREE.MeshStandardMaterial({ color: BONE.clone(), roughness: 0.7, metalness: 0 });
+        return;
+      }
+      if (!id || id === 'context') {
+        o.material = muscleMaterial();     // same flesh, just not part of the plan
+        o.material.color.copy(CONTEXT);
         return;
       }
       o.material = muscleMaterial();
